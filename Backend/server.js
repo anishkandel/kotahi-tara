@@ -7,11 +7,23 @@ const authRoutes = require('./routes/authRoutes');
 const poolRoutes = require('./routes/poolRoutes');
 const contributionRoutes = require('./routes/contributionRoutes');
 
+const uploadRoutes = require('./routes/uploadRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+
+
 const app = express();
 connectDB();
 
 app.use(cors());
 app.use(express.json());
+
+app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
+
+app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.json({ message: 'Kotahi Tāra API is running ', version: '1.0' });
+});
 
 app.get('/', (req, res) => {
   res.json({ message: 'Kotahi Tāra API is running' });
@@ -20,6 +32,10 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/pools', poolRoutes);
 app.use('/api/contributions', contributionRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/payment', paymentRoutes);
+
+
 
 //  404 handler
 app.use((req, res) => {

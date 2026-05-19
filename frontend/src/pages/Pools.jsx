@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/axios';
+import ImageCarousel from '../components/ImageCarousel';
 
 export default function Pools() {
   const [pools, setPools] = useState([]);
@@ -19,6 +20,14 @@ export default function Pools() {
     </div>
   );
 
+  // Helper to get all images for a pool
+  const getImages = (pool) => {
+    const imgs = [];
+    if (pool.imageUrl) imgs.push(pool.imageUrl);
+    if (pool.images && pool.images.length > 0) imgs.push(...pool.images);
+    return [...new Set(imgs)]; // remove duplicates
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-12">
       <h1 className="text-3xl font-bold mb-2">Active Pools</h1>
@@ -30,9 +39,10 @@ export default function Pools() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pools.map(pool => (
             <div key={pool._id} className="bg-[#12121A] border border-[#1E1E2E] rounded-xl overflow-hidden hover:border-[#00FFB2] transition-colors">
-              {pool.imageUrl && (
-                <img src={pool.imageUrl} alt={pool.title} className="w-full h-48 object-cover" />
-              )}
+
+              {/* Carousel */}
+              <ImageCarousel images={getImages(pool)} alt={pool.title} />
+
               <div className="p-6">
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="text-lg font-bold">{pool.title}</h3>

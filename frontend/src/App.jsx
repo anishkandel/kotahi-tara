@@ -8,6 +8,9 @@ import Pools from './pages/Pools';
 import PoolDetail from './pages/PoolDetail';
 import Dashboard from './pages/Dashboard';
 import AdminPanel from './pages/AdminPanel';
+import PaymentSuccess from './pages/PaymentSuccess';
+
+
 
 export default function App() {
   return (
@@ -23,6 +26,7 @@ export default function App() {
             <Route path="/pools/:id" element={<PoolDetail />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/payment/success" element={<PaymentSuccess />} />
           </Routes>
         </main>
       </BrowserRouter>
