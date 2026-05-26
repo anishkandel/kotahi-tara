@@ -10,28 +10,20 @@ const uploadRoutes = require('./routes/uploadRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const campaignRoutes = require('./routes/campaignRoutes');
 const startupRoutes = require('./routes/startupRoutes');
-// ADD with other requires
 const notificationRoutes = require('./routes/notificationRoutes');
-
-// ADD with other routes
-
 const app = express();
 connectDB();
 
-//  1. CORS first
+//CORS 
 app.use(cors({
   origin: 'https://kotahi-tara.vercel.app',
   credentials: true
 }));
 
-//  2. Webhook MUST come before express.json() — it needs raw bytes
 app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
-
-//  3. JSON body parsing for everything else
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-//  4. Routes — registered once, in one place
 app.get('/', (req, res) => {
   res.json({ message: 'Kotahi Tāra API is running', version: '1.0' });
 });
@@ -41,7 +33,7 @@ app.use('/api/pools', poolRoutes);
 app.use('/api/contributions', contributionRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/payment', paymentRoutes);
-app.use('/api/campaigns', campaignRoutes); // only once
+app.use('/api/campaigns', campaignRoutes); 
 app.use('/api/startups', startupRoutes);
 app.use('/api/notifications', notificationRoutes);
 
