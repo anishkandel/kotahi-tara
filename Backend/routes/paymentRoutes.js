@@ -10,6 +10,8 @@ const router = express.Router();
 // Creates a Stripe checkout session for joining a pool
 router.post('/create-checkout-session', auth, async (req, res) => {
   try {
+    if (req.user.role === 'admin')
+      return res.status(403).json({ message: 'Admins cannot join pools' });
     const { poolId } = req.body;
 
     const pool = await Pool.findById(poolId);
@@ -48,7 +50,7 @@ router.post('/create-checkout-session', auth, async (req, res) => {
         },
       ],
       mode: 'payment',
-      success_url: `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${process.env.FRONTEND_URL}/pools/${poolId}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/pools/${poolId}`,
       metadata: {
         poolId: poolId.toString(),
@@ -60,6 +62,134 @@ router.post('/create-checkout-session', auth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Failed to create checkout session' });
+  }
+});
+
+// POST /api/payment/create-payment-intent
+router.post('/create-payment-intent', auth, async (req, res) => {
+  try {
+    const { poolId } = req.body;
+
+    const pool = await Pool.findById(poolId);
+    if (!pool) return res.status(404).json({ message: 'Pool not found' });
+
+    if (pool.status === 'completed')
+      return res.status(400).json({ message: 'Pool is already completed' });
+
+    const existing = await Contribution.findOne({ user: req.user.id, pool: poolId });
+    if (existing)
+      return res.status(400).json({ message: 'You have already joined this pool' });
+
+    if (pool.contributionAmount < 1)
+      return res.status(400).json({ message: 'Contribution amount must be at least $1 NZD' });
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(pool.contributionAmount * 100),
+      currency: 'nzd',
+      metadata: {
+        poolId: poolId.toString(),
+        userId: req.user.id.toString(),
+      },
+    });
+
+    res.json({ clientSecret: paymentIntent.client_secret });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to create payment intent' });
+  }
+});
+
+// POST /api/payment/confirm-contribution
+router.post('/confirm-contribution', auth, async (req, res) => {
+  try {
+    const { poolId, paymentIntentId } = req.body;
+
+    // Verify payment with Stripe
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    if (paymentIntent.status !== 'succeeded')
+      return res.status(400).json({ message: 'Payment not confirmed' });
+
+    const pool = await Pool.findById(poolId);
+    if (!pool) return res.status(404).json({ message: 'Pool not found' });
+
+    // Check not already saved
+    let contribution = await Contribution.findOne({ user: req.user.id, pool: poolId });
+    if (!contribution) {
+      contribution = new Contribution({
+        user: req.user.id,
+        pool: poolId,
+        amount: pool.contributionAmount,
+      });
+      await contribution.save();
+
+      pool.totalContributed += pool.contributionAmount;
+      if (pool.totalContributed >= pool.targetAmount) {
+        pool.status = 'completed';
+        if (pool.winnerReleaseMode === 'instant') {
+          const allContributions = await Contribution.find({ pool: pool._id });
+          const randomIndex = Math.floor(Math.random() * allContributions.length);
+          const winnerContribution = allContributions[randomIndex];
+          pool.winner = winnerContribution.user;
+          pool.winningTicket = winnerContribution.ticketCode;
+          pool.winnerSelectedAt = new Date();
+          pool.winnerPublished = true;
+        }
+      }
+      await pool.save();
+    }
+
+    res.json({
+      success: true,
+      ticketCode: contribution.ticketCode,
+      pool
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error confirming contribution' });
+  }
+});
+
+// POST /api/payment/create-donation-checkout
+router.post('/create-donation-checkout', auth, async (req, res) => {
+  try {
+    const { campaignId, amount, message, isAnonymous } = req.body;
+
+    const Campaign = require('../models/Campaign');
+    const campaign = await Campaign.findById(campaignId);
+    if (!campaign) return res.status(404).json({ message: 'Campaign not found' });
+    if (amount < 1) return res.status(400).json({ message: 'Minimum donation is $1' });
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'nzd',
+          product_data: {
+            name: `Donation — ${campaign.title}`,
+            description: `Supporting: ${campaign.description?.slice(0, 100)}`,
+            images: campaign.imageUrl ? [campaign.imageUrl] : [],
+          },
+          unit_amount: Math.round(amount * 100),
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL}/donate/${campaignId}?donation=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/donate/${campaignId}`,
+      metadata: {
+        campaignId: campaignId.toString(),
+        userId: req.user.id.toString(),
+        amount: amount.toString(),
+        message: message || '',
+        isAnonymous: isAnonymous ? 'true' : 'false',
+        type: 'donation'
+      }
+    });
+
+    res.json({ url: session.url, sessionId: session.id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to create donation checkout' });
   }
 });
 
@@ -119,7 +249,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       }
       await pool.save();
 
-      console.log(`✅ Payment confirmed — User ${userId} joined pool ${poolId}`);
+      console.log(` Payment confirmed — User ${userId} joined pool ${poolId}`);
     } catch (err) {
       console.error('Error processing webhook:', err);
     }
@@ -129,8 +259,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 });
 
 // GET /api/payment/success?session_id=xxx
-// Verify payment was successful
-// GET /api/payment/success?session_id=xxx
+//
 router.get('/success', auth, async (req, res) => {
   try {
     const { session_id } = req.query;
@@ -140,16 +269,47 @@ router.get('/success', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Payment not completed' });
     }
 
-    const { poolId, userId } = session.metadata;
+    const { type, userId } = session.metadata;
 
-    // Check if contribution already exists (webhook may have already saved it)
+    // --- DONATION FLOW ---
+    if (type === 'donation') {
+      const Campaign = require('../models/Campaign');
+      const Donation = require('../models/Donation');
+      const { campaignId, amount, message, isAnonymous } = session.metadata;
+
+      let donation = await Donation.findOne({
+        stripePaymentIntentId: session.payment_intent
+      });
+
+      if (!donation) {
+        const campaign = await Campaign.findById(campaignId);
+        if (!campaign) return res.status(404).json({ message: 'Campaign not found' });
+
+        donation = await Donation.create({
+          campaign: campaignId,
+          donor: userId,
+          amount: Number(amount),
+          message: message || '',
+          isAnonymous: isAnonymous === 'true',
+          stripePaymentIntentId: session.payment_intent
+        });
+
+        campaign.totalRaised += Number(amount);
+        if (campaign.totalRaised >= campaign.goalAmount) campaign.status = 'completed';
+        await campaign.save();
+      }
+
+      return res.json({ success: true, type: 'donation', campaignId });
+    }
+
+    // --- POOL FLOW ---
+    const { poolId } = session.metadata;
     let contribution = await Contribution.findOne({ user: userId, pool: poolId });
 
     if (!contribution) {
       const pool = await Pool.findById(poolId);
       if (!pool) return res.status(404).json({ message: 'Pool not found' });
 
-      // Save contribution now
       contribution = new Contribution({
         user: userId,
         pool: poolId,
@@ -157,11 +317,9 @@ router.get('/success', auth, async (req, res) => {
       });
       await contribution.save();
 
-      // Update pool total
       pool.totalContributed += pool.contributionAmount;
       if (pool.totalContributed >= pool.targetAmount) {
         pool.status = 'completed';
-
         if (pool.winnerReleaseMode === 'instant') {
           const allContributions = await Contribution.find({ pool: pool._id });
           const randomIndex = Math.floor(Math.random() * allContributions.length);
@@ -175,12 +333,7 @@ router.get('/success', auth, async (req, res) => {
       await pool.save();
     }
 
-    res.json({
-      success: true,
-      ticketCode: contribution.ticketCode,
-      poolId,
-      pool: contribution.pool
-    });
+    res.json({ success: true, ticketCode: contribution.ticketCode, poolId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Error verifying payment' });

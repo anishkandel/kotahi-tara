@@ -36,7 +36,7 @@ router.post('/', auth, async (req, res) => {
     if (pool.totalContributed >= pool.targetAmount) {
       pool.status = 'completed';
 
-      // 🆕 If instant mode, auto select winner immediately
+      // If instant mode, auto select winner immediately
       if (pool.winnerReleaseMode === 'instant') {
         const allContributions = await Contribution.find({ pool: pool._id });
         const randomIndex = Math.floor(Math.random() * allContributions.length);
@@ -51,7 +51,7 @@ router.post('/', auth, async (req, res) => {
 
     res.status(201).json({
       message: 'Successfully joined pool!',
-      ticketCode: contribution.ticketCode, // 🆕 return ticket to user
+      ticketCode: contribution.ticketCode, //  return ticket to user
       contribution,
       pool
     });

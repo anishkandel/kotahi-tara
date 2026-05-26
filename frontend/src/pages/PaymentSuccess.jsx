@@ -38,7 +38,7 @@ export default function PaymentSuccess() {
     <div className="flex justify-center items-center min-h-screen px-4">
       <div className="bg-[#12121A] border border-[#00FFB2] rounded-xl p-10 max-w-md w-full text-center">
 
-        <div className="text-6xl mb-4">🎉</div>
+        <div className="text-6xl mb-4"></div>
         <h1 className="text-2xl font-extrabold text-[#00FFB2] mb-2">Payment Successful!</h1>
         <p className="text-gray-400 mb-6">You have officially joined the pool. Good luck!</p>
 
@@ -49,7 +49,7 @@ export default function PaymentSuccess() {
             <p className="text-[#00FFB2] font-bold font-mono tracking-widest text-2xl">
               {data.ticketCode}
             </p>
-            <p className="text-gray-500 text-xs mt-2">Save this code — it's your entry ticket!</p>
+            <p className="text-gray-500 text-xs mt-2">Save this code. It's your entry ticket!</p>
           </div>
         )}
 

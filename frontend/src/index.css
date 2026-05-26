@@ -6,6 +6,15 @@ body {
   color: #ffffff;
   font-family: 'Inter', sans-serif;
 }
+@layer base {
+  iframe {
+    all: revert;
+  }
+}
+
+nav {
+  background-color: #12121A !important;
+}
 
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #12121A; }

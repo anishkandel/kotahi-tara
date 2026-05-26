@@ -25,7 +25,7 @@ export default function Home() {
         <h2 className="text-3xl font-bold text-center mb-12">How It Works</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {[
-            { step: '01', title: 'Browse Pools', desc: 'Find a pool for something you want — PS5, iPhone, Dyson and more.' },
+            { step: '01', title: 'Browse Pools', desc: 'Find a pool for something you want  PS5, iPhone, Dyson and more.' },
             { step: '02', title: 'Contribute $1', desc: 'Join the pool with a small contribution. Everyone gets a fair shot.' },
             { step: '03', title: 'Win the Prize', desc: 'Once the pool is full, a random winner is selected fairly and transparently.' },
           ].map((item) => (
