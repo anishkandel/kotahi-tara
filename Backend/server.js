@@ -19,7 +19,10 @@ const app = express();
 connectDB();
 
 //  1. CORS first
-app.use(cors());
+app.use(cors({
+  origin: 'https://kotahi-tara.vercel.app',
+  credentials: true
+}));
 
 //  2. Webhook MUST come before express.json() — it needs raw bytes
 app.use('/api/payment/webhook', express.raw({ type: 'application/json' }));
