@@ -61,9 +61,13 @@ export default function Pools() {
     <div className="max-w-6xl mx-auto px-6 py-12">
 
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Browse Pools</h1>
-        <p className="text-gray-400">Join a pool and get your chance to win</p>
+      <div className="mb-10 text-center">
+        <h1 className="text-4xl font-extrabold mb-3">
+          <span className="text-[#00FFB2]">Contribute 1$ </span>Win Big
+        </h1>
+        <p className="text-gray-400 max-w-xl mx-auto">
+          Join a pool and get your chance to win
+        </p>
       </div>
 
       {/* Search Bar */}
