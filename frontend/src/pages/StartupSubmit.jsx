@@ -16,7 +16,7 @@ export default function StartupSubmit() {
   const [success, setSuccess] = useState(false);
 
   const [form, setForm] = useState({
-    // Step 1 — Basic Info
+    // Step 1  Basic Info
     title: '',
     tagline: '',
     industry: 'Other',
@@ -26,16 +26,16 @@ export default function StartupSubmit() {
     equityOffered: '',
     imageUrl: '',
 
-    // Step 2 — Pitch
+    // Step 2  Pitch
     story: '',
     fundUsage: '',
 
-    // Step 3 — Team
+    // Step 3  Team
     teamMembers: [
       { name: '', role: '', linkedin: '' }
     ],
 
-    // Step 4 — Documents & Contact
+    // Step 4  Documents & Contact
     pitchDeckUrl: '',
     whitepaperUrl: '',
     legalDocUrl: '',
@@ -158,7 +158,7 @@ export default function StartupSubmit() {
 
       <div className="bg-[#12121A] border border-[#1E1E2E] rounded-xl p-8">
 
-        {/* Step 1 — Basic Info */}
+        {/* Step 1  Basic Info */}
         {step === 0 && (
           <div className="space-y-5">
             <h2 className="text-xl font-bold mb-4">Basic Information</h2>
@@ -235,7 +235,7 @@ export default function StartupSubmit() {
           </div>
         )}
 
-        {/* Step 2 — Pitch */}
+        {/* Step 2  Pitch */}
         {step === 1 && (
           <div className="space-y-5">
             <h2 className="text-xl font-bold mb-4">Your Pitch</h2>
@@ -267,7 +267,7 @@ export default function StartupSubmit() {
           </div>
         )}
 
-        {/* Step 3 — Team */}
+        {/* Step 3  Team */}
         {step === 2 && (
           <div className="space-y-5">
             <h2 className="text-xl font-bold mb-2">Team Members</h2>
@@ -323,7 +323,7 @@ export default function StartupSubmit() {
           </div>
         )}
 
-        {/* Step 4 — Documents & Contact */}
+        {/* Step 4  Documents & Contact */}
         {step === 3 && (
           <div className="space-y-5">
             <h2 className="text-xl font-bold mb-2">Documents & Contact</h2>
@@ -432,7 +432,7 @@ export default function StartupSubmit() {
           </div>
         )}
 
-        {/* Step 5 — Review */}
+        {/* Step 5  Review */}
         {step === 4 && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold mb-4">Review & Submit</h2>

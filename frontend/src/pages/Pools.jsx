@@ -60,6 +60,7 @@ export default function Pools() {
   return (
     <div className="max-w-6xl mx-auto px-6 py-12">
 
+    
       {/* Header */}
       <div className="mb-10 text-center">
         <h1 className="text-4xl font-extrabold mb-3">

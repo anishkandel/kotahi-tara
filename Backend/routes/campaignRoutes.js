@@ -5,11 +5,11 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { auth, isAdmin } = require('../middleware/authMiddleware');
 const createNotification = require('../utils/createNotification');
 const User = require('../models/User');
+const sendEmail = require('../utils/sendEmail');
 
 const router = express.Router();
 
-// PUT /api/campaigns/:id/approve — admin approves
-// UPDATED — approve route
+// FIXED  approve route
 router.put('/:id/approve', auth, isAdmin, async (req, res) => {
   try {
     const campaign = await Campaign.findByIdAndUpdate(
@@ -19,14 +19,37 @@ router.put('/:id/approve', auth, isAdmin, async (req, res) => {
     );
     if (!campaign) return res.status(404).json({ message: 'Campaign not found' });
 
-    // Notify campaign owner
-   await createNotification({
-    recipient: campaign.createdBy,
-    type: 'campaign_approved',
-    title: 'Campaign Approved!',
-    message: `Your campaign "${campaign.title}" has been approved and is now live.`,
-    link: `/donate/${campaign._id}`  // 
+    //  Get owner FIRST before using it
+    const owner = await User.findById(campaign.createdBy);
+
+    //  In-app notification
+    await createNotification({
+      recipient: campaign.createdBy,
+      type: 'campaign_approved',
+      title: 'Campaign Approved! 🎉',
+      message: `Your campaign "${campaign.title}" has been approved and is now live.`,
+      link: `/donate/${campaign._id}`
     });
+
+    //  Email notification
+    if (owner) {
+      await sendEmail({
+        to: owner.email,
+        subject: 'Campaign Approved - Kotahi Tāra',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #00FFB2;">Campaign Approved! 🎉</h2>
+            <p>Kia Ora ${owner.name},</p>
+            <p>Your campaign <strong>${campaign.title}</strong> has been approved and is now live on Kotahi Tāra.</p>
+            <a href="${process.env.FRONTEND_URL}/donate/${campaign._id}" 
+              style="display:inline-block; padding:12px 24px; background:#00FFB2; color:#000; font-weight:bold; border-radius:8px; text-decoration:none; margin-top:16px;">
+              View Campaign
+            </a>
+            <p style="color:#999; margin-top:24px; font-size:12px;">Kotahi Tāra  Contribute small, win big</p>
+          </div>
+        `
+      });
+    }
 
     res.json({ message: 'Campaign approved!', campaign });
   } catch (err) {
@@ -35,8 +58,7 @@ router.put('/:id/approve', auth, isAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/campaigns/:id/reject — admin rejects
-// UPDATED — reject route
+// FIXED  reject route
 router.put('/:id/reject', auth, isAdmin, async (req, res) => {
   try {
     const campaign = await Campaign.findByIdAndUpdate(
@@ -46,17 +68,42 @@ router.put('/:id/reject', auth, isAdmin, async (req, res) => {
     );
     if (!campaign) return res.status(404).json({ message: 'Campaign not found' });
 
-    // Notify campaign owner
+    //  Get owner FIRST
+    const owner = await User.findById(campaign.createdBy);
+
+    //  In-app notification
     await createNotification({
-    recipient: campaign.createdBy,
-    type: 'campaign_rejected',
-    title: 'Campaign Needs Changes',
-    message: `Your campaign "${campaign.title}" was not approved. Reason: ${req.body?.adminNote || 'See admin feedback.'}`,
-    link: `/dashboard`  // this one is fine already
+      recipient: campaign.createdBy,
+      type: 'campaign_rejected',
+      title: 'Campaign Needs Changes',
+      message: `Your campaign "${campaign.title}" was not approved. Reason: ${req.body?.adminNote || 'See admin feedback.'}`,
+      link: `/dashboard`
     });
+
+    //  Email notification
+    if (owner) {
+      await sendEmail({
+        to: owner.email,
+        subject: 'Campaign Update - Kotahi Tāra',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #ff4444;">Campaign Needs Changes</h2>
+            <p>Kia Ora ${owner.name},</p>
+            <p>Your campaign <strong>${campaign.title}</strong> was not approved.</p>
+            <p><strong>Reason:</strong> ${req.body?.adminNote || 'Please check your dashboard for feedback.'}</p>
+            <a href="${process.env.FRONTEND_URL}/dashboard"
+              style="display:inline-block; padding:12px 24px; background:#00FFB2; color:#000; font-weight:bold; border-radius:8px; text-decoration:none; margin-top:16px;">
+              View Dashboard
+            </a>
+            <p style="color:#999; margin-top:24px; font-size:12px;">Kotahi Tāra  Contribute small, win big</p>
+          </div>
+        `
+      });
+    }
 
     res.json({ message: 'Campaign rejected.', campaign });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Error rejecting campaign' });
   }
 });
@@ -90,7 +137,7 @@ router.get('/pending', auth, isAdmin, async (req, res) => {
   }
 });
 
-// GET /api/campaigns — get all approved campaigns (public)
+// GET /api/campaigns  get all approved campaigns (public)
 router.get('/', async (req, res) => {
   try {
     const { search, category, sort } = req.query;
@@ -115,7 +162,7 @@ router.get('/', async (req, res) => {
 });
 
 
-// GET /api/campaigns/my — get current user's campaigns
+// GET /api/campaigns/my  get current user's campaigns
 router.get('/my', auth, async (req, res) => {
   try {
     const campaigns = await Campaign.find({ createdBy: req.user.id })
@@ -126,7 +173,7 @@ router.get('/my', auth, async (req, res) => {
   }
 });
 
-// ADD — GET /api/campaigns/all — admin only, all campaigns
+// ADD  GET /api/campaigns/all  admin only, all campaigns
 router.get('/all', auth, isAdmin, async (req, res) => {
   try {
     const campaigns = await Campaign.find()
@@ -138,7 +185,7 @@ router.get('/all', auth, isAdmin, async (req, res) => {
   }
 });
 
-// GET /api/campaigns/:id — single campaign
+// GET /api/campaigns/:id  single campaign
 router.get('/:id', async (req, res) => {
   try {
     const campaign = await Campaign.findById(req.params.id)
@@ -150,8 +197,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/campaigns — any user can submit a campaign for approval
-// UPDATED — POST / (submit campaign) — notify admins
+// POST /api/campaigns  any user can submit a campaign for approval
+// UPDATED  POST / (submit campaign)  notify admins
 router.post('/', auth, async (req, res) => {
   try {
     const { title, description, goalAmount, ...rest } = req.body;
@@ -165,7 +212,6 @@ router.post('/', auth, async (req, res) => {
     });
 
     //  Notify all admins
-    const User = require('../models/User');
     const admins = await User.find({ role: 'admin' });
     await Promise.all(admins.map(admin =>
       createNotification({
@@ -184,7 +230,7 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// DELETE /api/campaigns/:id — admin deletes
+// DELETE /api/campaigns/:id  admin deletes
 router.delete('/:id', auth, isAdmin, async (req, res) => {
   try {
     await Campaign.findByIdAndDelete(req.params.id);
@@ -195,7 +241,7 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
   }
 });
 
-// POST /api/campaigns/:id/donate — donate to campaign
+// POST /api/campaigns/:id/donate  donate to campaign
 router.post('/:id/donate', auth, async (req, res) => {
   try {
     const { amount, message, isAnonymous } = req.body;
@@ -223,7 +269,7 @@ router.post('/:id/donate', auth, async (req, res) => {
   }
 });
 
-// POST /api/campaigns/:id/confirm-donation — confirm after payment
+// POST /api/campaigns/:id/confirm-donation  confirm after payment
 router.post('/:id/confirm-donation', auth, async (req, res) => {
   try {
     const { paymentIntentId, amount, message, isAnonymous } = req.body;
@@ -256,7 +302,7 @@ router.post('/:id/confirm-donation', auth, async (req, res) => {
   }
 });
 
-// GET /api/campaigns/:id/donations — public donor list
+// GET /api/campaigns/:id/donations  public donor list
 router.get('/:id/donations', async (req, res) => {
   try {
     const donations = await Donation.find({ campaign: req.params.id })

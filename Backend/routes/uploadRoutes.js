@@ -4,7 +4,7 @@ const { auth } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// POST /api/upload — upload image, returns URL
+// POST /api/upload  upload image, returns URL
 router.post('/', auth, upload.single('image'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });

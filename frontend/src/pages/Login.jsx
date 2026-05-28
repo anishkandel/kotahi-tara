@@ -7,8 +7,29 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showResend, setShowResend] = useState(false);
+  const [success, setSuccess] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const handleResendVerification = async () => {
+  try {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    const res = await api.post('/auth/resend-verification', {
+      email: form.email
+    });
+
+    setSuccess(res.data.message || 'Verification email sent again.');
+  } catch (err) {
+    setError(err.response?.data?.message || 'Failed to resend verification email');
+  } finally {
+    setLoading(false);
+  }
+};
+  
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,7 +40,13 @@ export default function Login() {
       login(res.data.user, res.data.token);
       navigate('/pools');
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
+      const message = err.response?.data?.message || 'Login failed';
+      setError(message);
+
+      if (message.includes('verify your email')) {
+        setShowResend(true);
+      }
+
     } finally {
       setLoading(false);
     }
@@ -31,6 +58,11 @@ export default function Login() {
         <h2 className="text-2xl font-bold mb-2">Welcome Back</h2>
         <p className="text-gray-400 mb-6 text-sm">Login to your Kotahi Tāra account</p>
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+        {success && (
+        <p className="text-[#00FFB2] text-sm mb-4">
+          {success}
+        </p>
+)}
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="email"
@@ -55,7 +87,25 @@ export default function Login() {
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
-        </form>
+
+          {showResend && (
+        <p className="text-sm text-center mb-4">
+          <button
+            type="button"
+            onClick={handleResendVerification}
+            disabled={loading || !form.email}
+            className="text-[#00FFB2] hover:underline disabled:opacity-50"
+          >
+            Resend verification email
+          </button>
+        </p>
+      )}
+        <p className="text-gray-400 text-sm text-center">
+          <Link to="/forgot-password" className="text-[#00FFB2] hover:underline">
+            Forgot password?
+          </Link>
+        </p>
+        </form>    
         <p className="text-gray-400 text-sm mt-4 text-center">
           Don't have an account?{' '}
           <Link to="/register" className="text-[#00FFB2] hover:underline">Sign Up</Link>

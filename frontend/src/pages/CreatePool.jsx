@@ -138,7 +138,7 @@ export default function CreatePool() {
 
               <div>
                 <label className="text-sm text-gray-400 mb-1 block">Admin Contact</label>
-                <input type="text" placeholder="email or phone — shown to winner"
+                <input type="text" placeholder="email or phone  shown to winner"
                   value={form.adminContact} onChange={(e) => update('adminContact', e.target.value)}
                   className="w-full bg-[#0A0A0F] border border-[#1E1E2E] rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-[#00FFB2]"
                 />
@@ -161,7 +161,7 @@ export default function CreatePool() {
                         ? 'bg-[#00FFB2] text-black'
                         : 'border border-[#1E1E2E] text-gray-400 hover:border-[#00FFB2]'
                     }`}>
-                    {mode === 'instant' ? '⚡ Instant' : mode === 'scheduled' ? '⏰ Scheduled' : '🖐 Manual'}
+                    {mode === 'instant' ? 'Instant' : mode === 'scheduled' ? 'Scheduled' : 'Manual'}
                   </button>
                 ))}
               </div>
@@ -227,11 +227,11 @@ export default function CreatePool() {
             <h2 className="text-lg font-bold mb-4 text-[#00FFB2]">Summary</h2>
             <div className="bg-[#0A0A0F] border border-[#1E1E2E] rounded-lg p-4 space-y-2">
               {[
-                { label: 'Title', value: form.title || '—' },
-                { label: 'Target', value: form.targetAmount ? `$${form.targetAmount} NZD` : '—' },
-                { label: 'Entry Fee', value: form.contributionAmount ? `$${form.contributionAmount} NZD` : '—' },
+                { label: 'Title', value: form.title || '' },
+                { label: 'Target', value: form.targetAmount ? `$${form.targetAmount} NZD` : '' },
+                { label: 'Entry Fee', value: form.contributionAmount ? `$${form.contributionAmount} NZD` : '' },
                 { label: 'Winner Mode', value: form.winnerReleaseMode },
-                { label: 'Admin Contact', value: form.adminContact || '—' },
+                { label: 'Admin Contact', value: form.adminContact || '' },
               ].map(item => (
                 <div key={item.label} className="flex justify-between text-sm">
                   <span className="text-gray-400">{item.label}</span>

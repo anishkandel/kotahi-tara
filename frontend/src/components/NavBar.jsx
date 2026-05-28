@@ -171,13 +171,7 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
-          <Link to="/community"
-            className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-500 relative">
-            Community
-            <span className="absolute -top-1 -right-1 text-xs bg-yellow-600 text-black px-1 rounded-full font-bold">
-              Soon
-            </span>
-          </Link>
+         
         </div>
 
         {/* Desktop Right Side */}
@@ -240,7 +234,7 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Mobile Right — Bell + Hamburger */}
+        {/* Mobile Right  Bell + Hamburger */}
         <div className="flex md:hidden items-center gap-2">
           {user && (
             <div className="relative" ref={dropdownRef}>

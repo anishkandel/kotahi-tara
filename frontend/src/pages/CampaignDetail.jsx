@@ -96,7 +96,7 @@ const handleDonate = async (e) => {
     <div className="max-w-5xl mx-auto px-6 py-12">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* Left — Campaign Info */}
+        {/* Left  Campaign Info */}
         <div className="lg:col-span-2">
 
           {/* Image */}
@@ -161,7 +161,7 @@ const handleDonate = async (e) => {
           </div>
         </div>
 
-        {/* Right — Donate Widget */}
+        {/* Right  Donate Widget */}
         <div className="lg:col-span-1">
           <div className="bg-[#12121A] border border-[#1E1E2E] rounded-xl p-6 sticky top-24">
 

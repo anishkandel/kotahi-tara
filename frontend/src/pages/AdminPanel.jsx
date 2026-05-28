@@ -867,7 +867,7 @@ const handleDeleteStartup = async (startupId) => {
               <div className="flex gap-4 mt-2">
                 {n.link && (
                   <Link to={n.link} className="text-xs text-[#00FFB2] hover:underline font-medium">
-                    View →
+                    View 
                   </Link>
                 )}
                 <button onClick={() => handleDeleteNotif(n._id)}
@@ -981,10 +981,12 @@ const handleDeleteStartup = async (startupId) => {
                     <p className="text-gray-400 text-sm mt-1">{n.message}</p>
                     <div className="flex gap-4 mt-2">
                       {n.link && (
-                        <Link to={n.link}
-                          className="text-xs text-[#00FFB2] hover:underline font-medium">
+                        <button
+                          onClick={() => navigate(n.link)}
+                          className="text-xs text-[#00FFB2] hover:underline font-medium"
+                        >
                           View →
-                        </Link>
+                        </button>
                       )}
                       <button onClick={() => handleDeleteNotif(n._id)}
                         className="text-xs text-gray-600 hover:text-red-400 transition-colors ml-auto">

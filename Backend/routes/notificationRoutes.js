@@ -4,7 +4,7 @@ const { auth } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// GET /api/notifications — get current user's notifications
+// GET /api/notifications  get current user's notifications
 router.get('/', auth, async (req, res) => {
   try {
     const notifications = await Notification.find({ recipient: req.user.id })
@@ -29,7 +29,7 @@ router.get('/unread-count', auth, async (req, res) => {
   }
 });
 
-// PUT /api/notifications/:id/read — mark one as read
+// PUT /api/notifications/:id/read  mark one as read
 router.put('/:id/read', auth, async (req, res) => {
   try {
     await Notification.findOneAndUpdate(
@@ -42,7 +42,7 @@ router.put('/:id/read', auth, async (req, res) => {
   }
 });
 
-// PUT /api/notifications/read-all — mark all as read
+// PUT /api/notifications/read-all  mark all as read
 router.put('/read-all', auth, async (req, res) => {
   try {
     await Notification.updateMany(
@@ -55,7 +55,7 @@ router.put('/read-all', auth, async (req, res) => {
   }
 });
 
-// DELETE /api/notifications/:id — delete one
+// DELETE /api/notifications/:id  delete one
 router.delete('/:id', auth, async (req, res) => {
   try {
     await Notification.findOneAndDelete({ _id: req.params.id, recipient: req.user.id });

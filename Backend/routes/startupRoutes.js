@@ -3,9 +3,11 @@ const Startup = require('../models/Startup');
 const { auth, isAdmin } = require('../middleware/authMiddleware');
 const createNotification = require('../utils/createNotification');
 const router = express.Router();
+const User = require('../models/User');
+const sendEmail = require('../utils/sendEmail');
 
-// POST /api/startups — submit a startup (any logged in user)
-// UPDATED — POST / (submit startup) — notify admins
+// POST /api/startups  submit a startup (any logged in user)
+// UPDATED  POST / (submit startup)  notify admins
 router.post('/', auth, async (req, res) => {
   try {
     const { title, description } = req.body;
@@ -22,7 +24,6 @@ router.post('/', auth, async (req, res) => {
     });
 
     //  Notify all admins
-    const User = require('../models/User');
     const admins = await User.find({ role: 'admin' });
     await Promise.all(admins.map(admin =>
       createNotification({
@@ -41,7 +42,7 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// GET /api/startups — all approved startups (public)
+// GET /api/startups  all approved startups (public)
 router.get('/', async (req, res) => {
   try {
     const { search, industry, stage } = req.query;
@@ -67,7 +68,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ADD — GET /api/startups/all — admin only
+// ADD  GET /api/startups/all  admin only
 router.get('/all', auth, isAdmin, async (req, res) => {
   try {
     const startups = await Startup.find()
@@ -79,7 +80,7 @@ router.get('/all', auth, isAdmin, async (req, res) => {
   }
 });
 
-// GET /api/startups/pending — admin only
+// GET /api/startups/pending  admin only
 router.get('/pending', auth, isAdmin, async (req, res) => {
   try {
     const startups = await Startup.find({ status: 'pending' })
@@ -91,7 +92,7 @@ router.get('/pending', auth, isAdmin, async (req, res) => {
   }
 });
 
-// GET /api/startups/my — current user's startups
+// GET /api/startups/my  current user's startups
 router.get('/my', auth, async (req, res) => {
   try {
     const startups = await Startup.find({ createdBy: req.user.id })
@@ -102,7 +103,7 @@ router.get('/my', auth, async (req, res) => {
   }
 });
 
-// GET /api/startups/:id — single startup (public)
+// GET /api/startups/:id  single startup (public)
 router.get('/:id', async (req, res) => {
   try {
     const startup = await Startup.findById(req.params.id)
@@ -114,8 +115,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// PUT /api/startups/:id/approve — admin approves
-// UPDATED — approve startup
+// FIXED  approve startup
 router.put('/:id/approve', auth, isAdmin, async (req, res) => {
   try {
     const startup = await Startup.findByIdAndUpdate(
@@ -125,22 +125,46 @@ router.put('/:id/approve', auth, isAdmin, async (req, res) => {
     );
     if (!startup) return res.status(404).json({ message: 'Startup not found' });
 
+    //  Get owner FIRST
+    const owner = await User.findById(startup.createdBy);
+
+    //  In-app notification
     await createNotification({
       recipient: startup.createdBy,
       type: 'startup_approved',
-      title: 'Startup Approved!',
+      title: 'Startup Approved! 🚀',
       message: `Your startup "${startup.title}" has been approved and is now listed.`,
       link: `/startups/${startup._id}`
     });
 
+    //  Email  no emailNotifications check, just send
+    if (owner) {
+      await sendEmail({
+        to: owner.email,
+        subject: 'Startup Approved - Kotahi Tāra',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #00FFB2;">Startup Approved! 🚀</h2>
+            <p>Kia Ora ${owner.name},</p>
+            <p>Your startup <strong>${startup.title}</strong> has been approved and is now listed on Kotahi Tāra.</p>
+            <a href="${process.env.FRONTEND_URL}/startups/${startup._id}"
+              style="display:inline-block; padding:12px 24px; background:#00FFB2; color:#000; font-weight:bold; border-radius:8px; text-decoration:none; margin-top:16px;">
+              View Startup
+            </a>
+            <p style="color:#999; margin-top:24px; font-size:12px;">Kotahi Tāra  Contribute small, win big</p>
+          </div>
+        `
+      });
+    }
+
     res.json({ message: 'Startup approved!', startup });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Error approving startup' });
   }
 });
 
-// PUT /api/startups/:id/reject — admin rejects
-// UPDATED — reject startup
+// FIXED  reject startup
 router.put('/:id/reject', auth, isAdmin, async (req, res) => {
   try {
     const startup = await Startup.findByIdAndUpdate(
@@ -150,6 +174,10 @@ router.put('/:id/reject', auth, isAdmin, async (req, res) => {
     );
     if (!startup) return res.status(404).json({ message: 'Startup not found' });
 
+    //  Get owner FIRST
+    const owner = await User.findById(startup.createdBy);
+
+    //  In-app notification
     await createNotification({
       recipient: startup.createdBy,
       type: 'startup_rejected',
@@ -158,13 +186,35 @@ router.put('/:id/reject', auth, isAdmin, async (req, res) => {
       link: `/dashboard`
     });
 
+    //  Email
+    if (owner) {
+      await sendEmail({
+        to: owner.email,
+        subject: 'Startup Update - Kotahi Tāra',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #ff4444;">Startup Needs Changes</h2>
+            <p>Kia Ora ${owner.name},</p>
+            <p>Your startup <strong>${startup.title}</strong> was not approved.</p>
+            <p><strong>Reason:</strong> ${req.body?.adminNote || 'Please check your dashboard for feedback.'}</p>
+            <a href="${process.env.FRONTEND_URL}/dashboard"
+              style="display:inline-block; padding:12px 24px; background:#00FFB2; color:#000; font-weight:bold; border-radius:8px; text-decoration:none; margin-top:16px;">
+              View Dashboard
+            </a>
+            <p style="color:#999; margin-top:24px; font-size:12px;">Kotahi Tāra  Contribute small, win big</p>
+          </div>
+        `
+      });
+    }
+
     res.json({ message: 'Startup rejected.', startup });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Error rejecting startup' });
   }
 });
 
-// PUT /api/startups/:id — edit (owner or admin)
+// PUT /api/startups/:id  edit (owner or admin)
 router.put('/:id', auth, async (req, res) => {
   try {
     const startup = await Startup.findById(req.params.id);
@@ -183,7 +233,7 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// DELETE /api/startups/:id — admin only
+// DELETE /api/startups/:id  admin only
 router.delete('/:id', auth, isAdmin, async (req, res) => {
   try {
     await Startup.findByIdAndDelete(req.params.id);

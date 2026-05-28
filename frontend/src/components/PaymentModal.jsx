@@ -173,7 +173,7 @@ export default function PaymentModal({ pool, onClose, onSuccess }) {
           </button>
 
           <p className="text-center text-xs text-gray-500 mt-3 flex items-center justify-center gap-1">
-            <span>🔒</span> Secured by Stripe — your payment is encrypted
+            <span>🔒</span> Secured by Stripe  your payment is encrypted
           </p>
 
         </div>

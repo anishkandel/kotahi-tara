@@ -3,8 +3,11 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const Pool = require('../models/Pool');
 const Contribution = require('../models/Contribution');
 const { auth } = require('../middleware/authMiddleware');
-
+const sendEmail = require('../utils/sendEmail');
+const User = require('../models/User');
 const router = express.Router();
+const createNotification = require('../utils/createNotification');
+
 
 // POST /api/payment/create-checkout-session
 // Creates a Stripe checkout session for joining a pool
@@ -40,7 +43,7 @@ router.post('/create-checkout-session', auth, async (req, res) => {
           price_data: {
             currency: 'nzd',
             product_data: {
-              name: `${pool.title} — Pool Entry`,
+              name: `${pool.title}  Pool Entry`,
               description: pool.description || `Contribute $${pool.contributionAmount} for a chance to win!`,
               images: pool.imageUrl ? [pool.imageUrl] : [],
             },
@@ -123,26 +126,84 @@ router.post('/confirm-contribution', auth, async (req, res) => {
       await contribution.save();
 
       pool.totalContributed += pool.contributionAmount;
-      if (pool.totalContributed >= pool.targetAmount) {
-        pool.status = 'completed';
-        if (pool.winnerReleaseMode === 'instant') {
-          const allContributions = await Contribution.find({ pool: pool._id });
-          const randomIndex = Math.floor(Math.random() * allContributions.length);
-          const winnerContribution = allContributions[randomIndex];
-          pool.winner = winnerContribution.user;
-          pool.winningTicket = winnerContribution.ticketCode;
-          pool.winnerSelectedAt = new Date();
-          pool.winnerPublished = true;
-        }
-      }
-      await pool.save();
-    }
+     if (pool.totalContributed >= pool.targetAmount) {
+    pool.status = 'completed';
 
-    res.json({
-      success: true,
-      ticketCode: contribution.ticketCode,
-      pool
-    });
+    if (pool.winnerReleaseMode === 'instant') {
+      const allContributions = await Contribution.find({ pool: pool._id });
+      const randomIndex = Math.floor(Math.random() * allContributions.length);
+      const winnerContribution = allContributions[randomIndex];
+      pool.winner = winnerContribution.user;
+      pool.winningTicket = winnerContribution.ticketCode;
+      pool.winnerSelectedAt = new Date();
+      pool.winnerPublished = true;
+      await pool.save();
+
+      //  Notify all contributors
+      await Promise.all(allContributions.map(c =>
+        createNotification({
+          recipient: c.user,
+          type: 'pool_completed',
+          title: `Pool "${pool.title}" is Complete`,
+          message: `The winner has been announced! Winning ticket: ${pool.winningTicket}`,
+          link: `/pools/${pool._id}`
+        })
+      ));
+
+      //  Notify winner
+      await createNotification({
+        recipient: winnerContribution.user,
+        type: 'pool_won',
+        title: `🏆 You Won "${pool.title}"!`,
+        message: `Congratulations! Your ticket ${pool.winningTicket} was selected. Contact admin: ${pool.adminContact || 'See pool page'}`,
+        link: `/pools/${pool._id}`
+      });
+
+      //  Notify admins
+      const admins = await User.find({ role: 'admin' });
+      await Promise.all(admins.map(admin =>
+        createNotification({
+          recipient: admin._id,
+          type: 'pool_completed',
+          title: `Pool "${pool.title}" Winner Auto-Selected`,
+          message: `Pool reached target. Winner ticket: ${pool.winningTicket}`,
+          link: `/pools/${pool._id}`
+        })
+      ));
+
+    } else {
+      //  Non-instant  just complete pool, notify contributors
+      await pool.save();
+      const allContributions = await Contribution.find({ pool: pool._id });
+      await Promise.all(allContributions.map(c =>
+        createNotification({
+          recipient: c.user,
+          type: 'pool_completed',
+          title: `Pool "${pool.title}" is Complete`,
+          message: pool.winnerReleaseMode === 'scheduled' && pool.scheduledReleaseTime
+            ? `Winner will be announced on ${new Date(pool.scheduledReleaseTime).toLocaleString()}`
+            : 'The winner will be announced soon by the admin.',
+          link: `/pools/${pool._id}`
+        })
+      ));
+      // ADD — notify admins
+    const admins = await User.find({ role: 'admin' });
+    await Promise.all(admins.map(admin =>
+      createNotification({
+        recipient: admin._id,
+        type: 'pool_completed',
+        title: `Pool "${pool.title}" is Ready`,
+        message: `Pool has reached its target. Please select and publish the winner.`,
+        link: `/pools/${pool._id}`
+      })
+    ));
+    }
+  } else {
+    // Pool not yet complete  just save
+    await pool.save();
+  }
+}
+res.json({ success: true, ticketCode: contribution.ticketCode, poolId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Error confirming contribution' });
@@ -165,7 +226,7 @@ router.post('/create-donation-checkout', auth, async (req, res) => {
         price_data: {
           currency: 'nzd',
           product_data: {
-            name: `Donation — ${campaign.title}`,
+            name: `Donation  ${campaign.title}`,
             description: `Supporting: ${campaign.description?.slice(0, 100)}`,
             images: campaign.imageUrl ? [campaign.imageUrl] : [],
           },
@@ -249,7 +310,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
       }
       await pool.save();
 
-      console.log(` Payment confirmed — User ${userId} joined pool ${poolId}`);
+      console.log(` Payment confirmed  User ${userId} joined pool ${poolId}`);
     } catch (err) {
       console.error('Error processing webhook:', err);
     }
@@ -297,43 +358,119 @@ router.get('/success', auth, async (req, res) => {
         campaign.totalRaised += Number(amount);
         if (campaign.totalRaised >= campaign.goalAmount) campaign.status = 'completed';
         await campaign.save();
+  //Send donation confirmation email (no emailNotifications check)
+        const donor = await User.findById(userId);
+        if (donor) {
+          await sendEmail({
+            to: donor.email,
+            subject: '❤️ Donation Confirmed - Kotahi Tāra',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #00FFB2;">Thank You for Your Donation! ❤️</h2>
+                <p>Kia Ora ${donor.name},</p>
+                <p>Your donation of <strong>$${amount} NZD</strong> to <strong>${campaign.title}</strong> was successful.</p>
+                <p>Your generosity makes a real difference. Thank you for supporting this cause.</p>
+                <a href="${process.env.FRONTEND_URL}/donate/${campaignId}"
+                  style="display:inline-block; padding:12px 24px; background:#00FFB2; color:#000; font-weight:bold; border-radius:8px; text-decoration:none; margin-top:16px;">
+                  View Campaign
+                </a>
+                <p style="color:#999; margin-top:24px; font-size:12px;">Kotahi Tāra  Contribute small, win big</p>
+              </div>
+            `
+          });
+        }
       }
 
       return res.json({ success: true, type: 'donation', campaignId });
     }
 
-    // --- POOL FLOW ---
-    const { poolId } = session.metadata;
-    let contribution = await Contribution.findOne({ user: userId, pool: poolId });
+// --- POOL FLOW ---
+const { poolId } = session.metadata;
+let contribution = await Contribution.findOne({ user: userId, pool: poolId });
 
-    if (!contribution) {
-      const pool = await Pool.findById(poolId);
-      if (!pool) return res.status(404).json({ message: 'Pool not found' });
+if (!contribution) {
+  const pool = await Pool.findById(poolId);
+  if (!pool) return res.status(404).json({ message: 'Pool not found' });
 
-      contribution = new Contribution({
-        user: userId,
-        pool: poolId,
-        amount: pool.contributionAmount,
-      });
-      await contribution.save();
+  contribution = new Contribution({
+    user: userId,
+    pool: poolId,
+    amount: pool.contributionAmount,
+  });
+  await contribution.save();
 
-      pool.totalContributed += pool.contributionAmount;
-      if (pool.totalContributed >= pool.targetAmount) {
-        pool.status = 'completed';
-        if (pool.winnerReleaseMode === 'instant') {
-          const allContributions = await Contribution.find({ pool: pool._id });
-          const randomIndex = Math.floor(Math.random() * allContributions.length);
-          const winnerContribution = allContributions[randomIndex];
-          pool.winner = winnerContribution.user;
-          pool.winningTicket = winnerContribution.ticketCode;
-          pool.winnerSelectedAt = new Date();
-          pool.winnerPublished = true;
-        }
-      }
+  pool.totalContributed += pool.contributionAmount;
+
+  // ✅ FIXED — only select winner if target is reached
+  if (pool.totalContributed >= pool.targetAmount) {
+    pool.status = 'completed';
+
+    if (pool.winnerReleaseMode === 'instant') {
+      const allContributions = await Contribution.find({ pool: pool._id });
+      const randomIndex = Math.floor(Math.random() * allContributions.length);
+      const winnerContribution = allContributions[randomIndex];
+      pool.winner = winnerContribution.user;
+      pool.winningTicket = winnerContribution.ticketCode;
+      pool.winnerSelectedAt = new Date();
+      pool.winnerPublished = true;
       await pool.save();
+
+      // Notify all contributors
+      await Promise.all(allContributions.map(c =>
+        createNotification({
+          recipient: c.user,
+          type: 'pool_completed',
+          title: `Pool "${pool.title}" is Complete`,
+          message: `The winner has been announced! Winning ticket: ${pool.winningTicket}`,
+          link: `/pools/${pool._id}`
+        })
+      ));
+
+      // Notify winner
+      await createNotification({
+        recipient: winnerContribution.user,
+        type: 'pool_won',
+        title: `You Won "${pool.title}"!`,
+        message: `Congratulations! Your ticket ${pool.winningTicket} was selected. Contact admin: ${pool.adminContact || 'See pool page'}`,
+        link: `/pools/${pool._id}`
+      });
+
+      // Notify admins
+      const admins = await User.find({ role: 'admin' });
+      await Promise.all(admins.map(admin =>
+        createNotification({
+          recipient: admin._id,
+          type: 'pool_completed',
+          title: `Pool "${pool.title}" Winner Auto-Selected`,
+          message: `Pool reached target. Winner ticket: ${pool.winningTicket}`,
+          link: `/pools/${pool._id}`
+        })
+      ));
+
+    } else {
+      // Non-instant — complete pool and notify
+      await pool.save();
+      const allContributions = await Contribution.find({ pool: pool._id });
+      await Promise.all(allContributions.map(c =>
+        createNotification({
+          recipient: c.user,
+          type: 'pool_completed',
+          title: `Pool "${pool.title}" is Complete`,
+          message: pool.winnerReleaseMode === 'scheduled' && pool.scheduledReleaseTime
+            ? `Winner will be announced on ${new Date(pool.scheduledReleaseTime).toLocaleString()}`
+            : 'The winner will be announced soon by the admin.',
+          link: `/pools/${pool._id}`
+        })
+      ));
     }
 
-    res.json({ success: true, ticketCode: contribution.ticketCode, poolId });
+  } else {
+    // Pool not full yet — just save
+    await pool.save();
+  }
+}
+
+res.json({ success: true, ticketCode: contribution.ticketCode, poolId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Error verifying payment' });

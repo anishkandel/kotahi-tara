@@ -41,11 +41,11 @@ export default function DonatePage() {
       {/* Header */}
       <div className="mb-10 text-center">
         <h1 className="text-4xl font-extrabold mb-3">
-           <span className="text-[#00FFB2]">Donate</span> to a Cause
+           <span className="text-[#00FFB2]">Donate</span> to a Cause ❤️
         </h1>
         <p className="text-gray-400 max-w-xl mx-auto">
           Support meaningful campaigns in Aotearoa New Zealand.
-          Every dollar counts — transparent, community driven giving.
+          Every dollar counts, transparent, community driven giving.
         </p>
         <Link
           to="/donate/submit"
