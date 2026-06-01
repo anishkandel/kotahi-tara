@@ -60,11 +60,13 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/pools  create pool (admin only)
+// UPDATED — add expiresAt
 router.post('/', auth, isAdmin, async (req, res) => {
   try {
     const {
       title, description, targetAmount, contributionAmount,
-      imageUrl, images, adminContact, winnerReleaseMode, scheduledReleaseTime
+      imageUrl, images, adminContact, winnerReleaseMode, scheduledReleaseTime,
+      expiresAt 
     } = req.body;
 
     if (!title || !targetAmount || !contributionAmount)
@@ -74,7 +76,8 @@ router.post('/', auth, isAdmin, async (req, res) => {
       title, description, targetAmount, contributionAmount,
       imageUrl, images, adminContact,
       winnerReleaseMode: winnerReleaseMode || 'manual',
-      scheduledReleaseTime: scheduledReleaseTime || null
+      scheduledReleaseTime: scheduledReleaseTime || null,
+      expiresAt: expiresAt || null  
     });
 
     res.status(201).json(pool);
@@ -276,6 +279,208 @@ router.post('/:id/publish-winner', auth, isAdmin, async (req, res) => {
   } catch (err) {
     console.error('❌ Error publishing winner:', err);
     res.status(500).json({ message: 'Error publishing winner' });
+  }
+});
+// POST /api/pools/:id/expire — admin manually expires a pool
+// UPDATED — expire route with auto refund
+router.post('/:id/expire', auth, isAdmin, async (req, res) => {
+  try {
+    const pool = await Pool.findById(req.params.id);
+    if (!pool) return res.status(404).json({ message: 'Pool not found' });
+    if (pool.status !== 'open') return res.status(400).json({ message: 'Pool is not open' });
+
+    pool.status = 'expired';
+    await pool.save();
+
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    const contributions = await Contribution.find({ pool: pool._id, refunded: false });
+
+    let refundCount = 0;
+    let failCount = 0;
+
+    // Auto refund all contributors
+    await Promise.all(contributions.map(async (c) => {
+      try {
+        if (c.stripeSessionId) {
+          const session = await stripe.checkout.sessions.retrieve(c.stripeSessionId);
+          if (session.payment_intent) {
+            await stripe.refunds.create({ payment_intent: session.payment_intent });
+          }
+        }
+        c.refunded = true;
+        c.refundedAt = new Date();
+        await c.save();
+        refundCount++;
+
+        // Notify user
+        await createNotification({
+          recipient: c.user,
+          type: 'pool_completed',
+          title: `Pool "${pool.title}" Expired`,
+          message: `The pool did not reach its target. Your $${c.amount} contribution has been automatically refunded.`,
+          link: `/pools/${pool._id}`
+        });
+      } catch (err) {
+        console.error(`Refund failed for contribution ${c._id}:`, err.message);
+        failCount++;
+
+        // Notify user of failure
+        await createNotification({
+          recipient: c.user,
+          type: 'pool_completed',
+          title: `Pool "${pool.title}" Expired`,
+          message: `The pool expired. We attempted to refund your $${c.amount} but it failed. Please contact support.`,
+          link: `/pools/${pool._id}`
+        });
+      }
+    }));
+
+    // Notify admins
+    const admins = await User.find({ role: 'admin' });
+    await Promise.all(admins.map(admin =>
+      createNotification({
+        recipient: admin._id,
+        type: 'pool_completed',
+        title: `Pool "${pool.title}" Expired`,
+        message: `Pool expired. ${refundCount} refunds processed successfully. ${failCount > 0 ? `${failCount} failed.` : ''}`,
+        link: `/pools/${pool._id}`
+      })
+    ));
+
+    res.json({ 
+      message: `Pool expired. ${refundCount} contributors refunded automatically.`,
+      refundCount,
+      failCount
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error expiring pool' });
+  }
+});
+
+// POST /api/pools/:id/refund — refund a single contributor
+router.post('/:id/refund', auth, async (req, res) => {
+  try {
+    const pool = await Pool.findById(req.params.id);
+    if (!pool) return res.status(404).json({ message: 'Pool not found' });
+    if (pool.status !== 'expired') return res.status(400).json({ message: 'Pool is not expired' });
+
+    // Find this user's contribution
+    const contribution = await Contribution.findOne({ pool: pool._id, user: req.user.id });
+    if (!contribution) return res.status(404).json({ message: 'No contribution found' });
+
+    if (contribution.refunded) return res.status(400).json({ message: 'Already refunded' });
+
+    // Process Stripe refund
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+
+    if (contribution.stripeSessionId) {
+      try {
+        // Get the session to find payment intent
+        const session = await stripe.checkout.sessions.retrieve(contribution.stripeSessionId);
+        if (session.payment_intent) {
+          await stripe.refunds.create({
+            payment_intent: session.payment_intent,
+          });
+        }
+      } catch (stripeErr) {
+        console.error('Stripe refund error:', stripeErr.message);
+        return res.status(500).json({ message: 'Stripe refund failed: ' + stripeErr.message });
+      }
+    }
+
+    // Mark contribution as refunded
+    contribution.refunded = true;
+    contribution.refundedAt = new Date();
+    await contribution.save();
+
+    // Update pool total
+    pool.totalContributed -= contribution.amount;
+    await pool.save();
+
+    // Notify user
+    await createNotification({
+      recipient: req.user.id,
+      type: 'pool_completed',
+      title: 'Refund Processed',
+      message: `Your $${contribution.amount} contribution to "${pool.title}" has been refunded.`,
+      link: `/pools/${pool._id}`
+    });
+
+    res.json({ message: `Refund of $${contribution.amount} processed successfully` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error processing refund' });
+  }
+});
+
+// POST /api/pools/:id/rollover — roll contribution to another pool
+router.post('/:id/rollover', auth, async (req, res) => {
+  try {
+    const { targetPoolId } = req.body;
+    if (!targetPoolId) return res.status(400).json({ message: 'Target pool ID required' });
+
+    const expiredPool = await Pool.findById(req.params.id);
+    if (!expiredPool) return res.status(404).json({ message: 'Pool not found' });
+    if (expiredPool.status !== 'expired') return res.status(400).json({ message: 'Pool is not expired' });
+
+    const targetPool = await Pool.findById(targetPoolId);
+    if (!targetPool) return res.status(404).json({ message: 'Target pool not found' });
+    if (targetPool.status !== 'open') return res.status(400).json({ message: 'Target pool is not open' });
+
+    // Check contribution amount matches
+    if (expiredPool.contributionAmount !== targetPool.contributionAmount) {
+      return res.status(400).json({ 
+        message: `Target pool requires $${targetPool.contributionAmount} contribution. Your contribution was $${expiredPool.contributionAmount}.` 
+      });
+    }
+
+    // Find user's contribution in expired pool
+    const oldContribution = await Contribution.findOne({ pool: expiredPool._id, user: req.user.id });
+    if (!oldContribution) return res.status(404).json({ message: 'No contribution found' });
+    if (oldContribution.refunded) return res.status(400).json({ message: 'Already refunded — cannot rollover' });
+    if (oldContribution.rolledOver) return res.status(400).json({ message: 'Already rolled over' });
+
+    // Check not already in target pool
+    const alreadyInTarget = await Contribution.findOne({ pool: targetPool._id, user: req.user.id });
+    if (alreadyInTarget) return res.status(400).json({ message: 'Already in target pool' });
+
+    // Create new contribution in target pool
+    const newContribution = new Contribution({
+      user: req.user.id,
+      pool: targetPool._id,
+      amount: oldContribution.amount,
+      stripeSessionId: oldContribution.stripeSessionId,
+    });
+    await newContribution.save();
+
+    // Update target pool total
+    targetPool.totalContributed += oldContribution.amount;
+    await targetPool.save();
+
+    // Mark old contribution as rolled over
+    oldContribution.rolledOver = true;
+    oldContribution.rolledOverAt = new Date();
+    oldContribution.rolledOverTo = targetPool._id;
+    await oldContribution.save();
+
+    // Notify user
+    await createNotification({
+      recipient: req.user.id,
+      type: 'pool_completed',
+      title: 'Contribution Rolled Over',
+      message: `Your contribution from "${expiredPool.title}" has been moved to "${targetPool.title}". Your new ticket: ${newContribution.ticketCode}`,
+      link: `/pools/${targetPool._id}`
+    });
+
+    res.json({ 
+      message: 'Rolled over successfully!',
+      newTicket: newContribution.ticketCode,
+      targetPool: targetPool.title
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error processing rollover' });
   }
 });
 

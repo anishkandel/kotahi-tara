@@ -12,6 +12,36 @@ const POOL_TYPE_COLORS = {
   startup: { bg: 'bg-orange-900/50', text: 'text-orange-400', label: '🚀 Startup' },
 };
 
+  function CountdownBadge({ expiresAt }) {
+    const [timeLeft, setTimeLeft] = useState(null);
+
+    useEffect(() => {
+      const tick = () => {
+        const diff = new Date(expiresAt) - new Date();
+        if (diff <= 0) { setTimeLeft(null); return; }
+        setTimeLeft({
+          days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+          minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
+          seconds: Math.floor((diff % (1000 * 60)) / 1000),
+        });
+      };
+      tick();
+      const interval = setInterval(tick, 1000);
+      return () => clearInterval(interval);
+    }, [expiresAt]);
+
+    if (!timeLeft) return null;
+
+    return (
+     
+    <p className="text-gray-400 text-xs mb-3">
+    Expires in <span className="text-white font-mono">{timeLeft.days}d {String(timeLeft.hours).padStart(2, '0')}h {String(timeLeft.minutes).padStart(2, '0')}m {String(timeLeft.seconds).padStart(2, '0')}s</span>
+  </p>
+
+    );
+  }
+
 export default function Pools() {
   const [pools, setPools] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +86,7 @@ export default function Pools() {
   };
 
   const poolTypeInfo = (type) => POOL_TYPE_COLORS[type] || POOL_TYPE_COLORS.standard;
+  
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-12">
@@ -185,7 +216,6 @@ export default function Pools() {
             const typeInfo = poolTypeInfo(pool.poolType);
             const progress = Math.min(100, Math.round((pool.totalContributed / pool.targetAmount) * 100));
             const spotsLeft = Math.round((pool.targetAmount - pool.totalContributed) / pool.contributionAmount);
-
             return (
               <div key={pool._id} className="bg-[#12121A] border border-[#1E1E2E] rounded-xl overflow-hidden hover:border-[#00FFB2] transition-all hover:-translate-y-1 duration-200">
 
@@ -229,6 +259,9 @@ export default function Pools() {
                     <p className="text-yellow-400 text-xs font-semibold mb-3">
                       {spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} remaining
                     </p>
+                  )}
+                  {pool.status === 'open' && pool.expiresAt && (
+                    <CountdownBadge expiresAt={pool.expiresAt} />
                   )}
 
                   {/* Charity info */}

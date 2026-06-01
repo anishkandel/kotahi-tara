@@ -9,7 +9,7 @@ const poolSchema = new mongoose.Schema(
     targetAmount: { type: Number, required: true },
     contributionAmount: { type: Number, required: true, default: 1 },
     totalContributed: { type: Number, default: 0 },
-    status: { type: String, enum: ['open', 'completed'], default: 'open' },
+    status: { type: String, enum: ['open', 'completed', 'expired'], default: 'open' },
     winner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     winningTicket: { type: String, default: null },       //  winning ticket code
 
@@ -24,7 +24,8 @@ const poolSchema = new mongoose.Schema(
     },
     scheduledReleaseTime: { type: Date, default: null },  //  for scheduled mode
     winnerPublished: { type: Boolean, default: false },   //  is winner visible publicly
-    winnerSelectedAt: { type: Date, default: null },      //  when winner was picked
+    winnerSelectedAt: { type: Date, default: null },  
+    expiresAt: { type: Date, default: null },    //  when winner was picked
   },
   { timestamps: true }
 );

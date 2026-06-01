@@ -33,7 +33,8 @@ export default function PoolDetail() {
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(false); //
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [refundLoading, setRefundLoading] = useState(false);
   const getImages = (pool) => {
     const imgs = [];
     if (pool.imageUrl) imgs.push(pool.imageUrl);
@@ -41,14 +42,22 @@ export default function PoolDetail() {
     return [...new Set(imgs)];
   };
 
-  const handlePaymentSuccess = (ticketCode) => {
+ const handlePaymentSuccess = async (ticketCode) => {
   setShowPaymentModal(false);
   setHasJoined(true);
   setMyTicket(ticketCode);
   setMessage('Payment successful! You have joined the pool!');
-  // Refresh pool data
-  api.get(`/pools/${id}`).then(res => setPool(res.data));
-  api.get(`/contributions/pool/${id}`).then(res => setContributors(res.data));
+  // Wait for both to complete before updating state
+  try {
+    const [poolRes, contribRes] = await Promise.all([
+      api.get(`/pools/${id}`),
+      api.get(`/contributions/pool/${id}`)
+    ]);
+    setPool(poolRes.data);
+    setContributors(contribRes.data);
+  } catch (err) {
+    console.error(err);
+  }
 };
 
   // Verify payment if redirected from Stripe
@@ -59,11 +68,18 @@ export default function PoolDetail() {
     if (sessionId && paymentStatus === 'success' && user) {
       setVerifying(true);
       api.get(`/payment/success?session_id=${sessionId}`)
-        .then(res => {
+        .then(async (res) => {
           if (res.data.success) {
             setHasJoined(true);
             setMyTicket(res.data.ticketCode);
             setMessage('Payment successful! You have joined the pool!');
+            // Refetch pool and contributors
+            const [poolRes, contribRes] = await Promise.all([
+              api.get(`/pools/${id}`),
+              api.get(`/contributions/pool/${id}`)
+            ]);
+            setPool(poolRes.data);
+            setContributors(contribRes.data);
           }
         })
         .catch(err => {
@@ -110,14 +126,45 @@ export default function PoolDetail() {
       setJoining(false);
     }
   };
+  const handleRefund = async () => {
+  if (!window.confirm('Request a refund for your contribution?')) return;
+  setRefundLoading(true);
+  setError('');
+  try {
+    const res = await api.post(`/pools/${id}/refund`);
+    setMessage(res.data.message);
+    setHasJoined(false);
+    setMyTicket(null);
+    api.get(`/pools/${id}`).then(res => setPool(res.data));
+  } catch (err) {
+    setError(err.response?.data?.message || 'Refund failed');
+  } finally {
+    setRefundLoading(false);
+  }
+};
 
   // Refetch pool after payment verified
-  useEffect(() => {
-    if (!hasJoined) return;
-    api.get(`/pools/${id}`).then(res => setPool(res.data));
-    api.get(`/contributions/pool/${id}`).then(res => setContributors(res.data));
-  }, [hasJoined]);
+useEffect(() => {
+  if (!pool?.expiresAt) return;
+  
+  const tick = () => {
+    const diff = new Date(pool.expiresAt) - new Date();
+    if (diff <= 0) {
+      setTimeLeft(null);
+      return;
+    }
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    setTimeLeft({ days, hours, minutes, seconds });
+  };
 
+  tick();
+  const interval = setInterval(tick, 1000);
+  return () => clearInterval(interval);
+}, [pool]);  //  depends on pool not pool.expiresAt
+    
   if (loading) return (
     <div className="flex justify-center items-center min-h-screen">
       <p className="text-gray-400">Loading pool...</p>
@@ -251,6 +298,18 @@ export default function PoolDetail() {
           </p>
         </div>
       )}
+      {/* Expired pool banner */}
+   {pool.status === 'expired' && (
+    <div className="bg-orange-900/20 rounded-xl p-6 mb-6">
+      <p className="text-orange-400 font-bold text-lg mb-2">This Pool Has Expired</p>
+      <p className="text-gray-400 text-sm">
+        This pool did not reach its target.{' '}
+        {hasJoined
+          ? 'Your contribution has been automatically refunded to your original payment method.'
+          : 'No contributors were affected.'}
+      </p>
+    </div>
+  )}
 
       {/* Verifying payment */}
       {verifying && (
@@ -271,34 +330,57 @@ export default function PoolDetail() {
         </p>
       )}
 
+     {/* Countdown Timer */}
+      {pool.status === 'open' && pool.expiresAt && timeLeft && (
+        <div className="bg-[#12121A] p-4 mb-6">
+          <p className="text-xs text-white-400 font-semibold mb-3 uppercase tracking-wide">Pool Expires In</p>
+          <div className="flex gap-4 justify-center">
+            {[
+              { label: 'Days', value: timeLeft.days },
+              { label: 'Hours', value: timeLeft.hours },
+              { label: 'Mins', value: timeLeft.minutes },
+              { label: 'Secs', value: timeLeft.seconds },
+            ].map(({ label, value }) => (
+              <div key={label} className="text-center">
+                <div className="bg-[#0A0A0F] px-3 py-2 min-w-[52px]">
+                  <p className="text-2xl font-bold text-white-400 font-mono">
+                    {String(value).padStart(2, '0')}
+                  </p>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Join Button */}
       {pool.status === 'open' && !verifying && (
-    <div className="mb-6">
-      {!user ? (
-        <button onClick={() => navigate('/login')}
-          className="w-full py-4 bg-[#00FFB2] text-black font-bold rounded-xl text-lg hover:opacity-90">
-          Login to Join Pool
-        </button>
-      ) : isAdmin ? (
-        // Admin sees this instead of join button
-        <div className="w-full py-4 bg-[#1E1E2E] text-gray-500 font-bold rounded-xl text-lg text-center border border-[#1E1E2E]">
-          Admins cannot join pools
+        <div className="mb-6">
+          {!user ? (
+            <button onClick={() => navigate('/login')}
+              className="w-full py-4 bg-[#00FFB2] text-black font-bold rounded-xl text-lg hover:opacity-90">
+              Login to Join Pool
+            </button>
+          ) : isAdmin ? (
+            <div className="w-full py-4 bg-[#1E1E2E] text-gray-500 font-bold rounded-xl text-lg text-center border border-[#1E1E2E]">
+              Admins cannot join pools
+            </div>
+          ) : hasJoined ? (
+            <div className="w-full py-4 bg-[#1E1E2E] text-[#00FFB2] font-bold rounded-xl text-lg text-center border border-[#00FFB2]">
+              You have joined this pool
+            </div>
+          ) : (
+            <button onClick={() => setShowPaymentModal(true)} disabled={joining}
+              className="w-full py-4 bg-[#00FFB2] text-black font-bold rounded-xl text-lg hover:opacity-90 disabled:opacity-50">
+              Join Pool ${pool.contributionAmount}
+            </button>
+          )}
+          {showPaymentModal && !isAdmin && (
+            <PaymentModal pool={pool} onClose={() => setShowPaymentModal(false)} onSuccess={handlePaymentSuccess} />
+          )}
         </div>
-      ) : hasJoined ? (
-        <div className="w-full py-4 bg-[#1E1E2E] text-[#00FFB2] font-bold rounded-xl text-lg text-center border border-[#00FFB2]">
-          You have joined this pool
-        </div>
-      ) : (
-        <button onClick={() => setShowPaymentModal(true)} disabled={joining}
-          className="w-full py-4 bg-[#00FFB2] text-black font-bold rounded-xl text-lg hover:opacity-90 disabled:opacity-50">
-          Join Pool ${pool.contributionAmount}
-        </button>
       )}
-      {showPaymentModal && !isAdmin && (
-        <PaymentModal pool={pool} onClose={() => setShowPaymentModal(false)} onSuccess={handlePaymentSuccess} />
-      )}
-    </div>
-  )}
       {/* Contributors */}
       <div className="bg-[#12121A] border border-[#1E1E2E] rounded-xl p-6">
         <h2 className="text-xl font-bold mb-4">Contributors ({contributors.length})</h2>

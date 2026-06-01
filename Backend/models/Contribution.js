@@ -14,7 +14,10 @@ const contributionSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     pool: { type: mongoose.Schema.Types.ObjectId, ref: 'Pool', required: true },
     amount: { type: Number, required: true },
-    ticketCode: { type: String, unique: true }
+    ticketCode: { type: String, unique: true },
+    stripeSessionId: { type: String, default: null },
+    refunded: { type: Boolean, default: false },
+    refundedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

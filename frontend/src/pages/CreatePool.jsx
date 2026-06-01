@@ -22,6 +22,8 @@ export default function CreatePool() {
     winnerReleaseMode: 'manual',
     scheduledReleaseTime: '',
     imageUrl: '',
+    expiryDays: '',   
+    expiresAt: '',  
   });
 
   if (!user || !isAdmin) {
@@ -61,7 +63,7 @@ export default function CreatePool() {
         extraImages = urls.slice(1);
         setUploading(false);
       }
-
+      console.log('expiresAt being sent:', form.expiresAt);
       await api.post('/pools', {
         ...form,
         imageUrl: finalImageUrl,
@@ -70,7 +72,8 @@ export default function CreatePool() {
         contributionAmount: Number(form.contributionAmount),
         scheduledReleaseTime: form.winnerReleaseMode === 'scheduled' && form.scheduledReleaseTime
           ? new Date(form.scheduledReleaseTime).toISOString()
-          : null
+          : null,
+          expiresAt: form.expiresAt || null,
       });
 
       navigate('/admin?tab=pools');
@@ -181,7 +184,38 @@ export default function CreatePool() {
                 />
               </div>
             )}
+
+            {/* ADD — after the scheduledReleaseTime section, before Images section */}
+            <div className="border-t border-[#1E1E2E] pt-6">
+              <h2 className="text-lg font-bold mb-4 text-[#00FFB2]">Pool Expiry (optional)</h2>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min="1"
+                  max="365"
+                  placeholder="e.g. 5"
+                  value={form.expiryDays}
+                  onChange={(e) => {
+                     const days = e.target.value;
+                      setForm(prev => ({
+                        ...prev,
+                        expiryDays: days,
+                        expiresAt: days ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() : ''
+                      }));
+                  }}
+                  className="w-24 bg-[#0A0A0F] border border-[#1E1E2E] rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-[#00FFB2]"
+                />
+                <span className="text-gray-400 text-sm">days</span>
+                {form.expiresAt && (
+                  <span className="text-xs text-gray-500">
+                    Expires: {new Date(form.expiresAt).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">If pool does not complete by this date, contributors can request a refund.</p>
+            </div>
           </div>
+
 
           {/* Images */}
           <div className="border-t border-[#1E1E2E] pt-6">

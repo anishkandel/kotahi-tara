@@ -122,6 +122,7 @@ router.post('/confirm-contribution', auth, async (req, res) => {
         user: req.user.id,
         pool: poolId,
         amount: pool.contributionAmount,
+        stripeSessionId: paymentIntentId,
       });
       await contribution.save();
 
@@ -289,6 +290,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         user: userId,
         pool: poolId,
         amount: pool.contributionAmount,
+        stripeSessionId: session.id,
       });
       await contribution.save();
 
@@ -396,6 +398,7 @@ if (!contribution) {
     user: userId,
     pool: poolId,
     amount: pool.contributionAmount,
+    stripeSessionId: session_id,
   });
   await contribution.save();
 
