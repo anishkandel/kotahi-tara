@@ -16,13 +16,13 @@ export default function ImageCarousel({ images = [], alt = '' }) {
   if (validImages.length === 0) return null;
 
   return (
-    <div className="relative w-full overflow-hidden rounded-xl bg-[#0A0A0F]">
+    <div className="relative w-full h-48 overflow-hidden rounded-xl bg-[#0A0A0F]">
       {validImages.map((img, index) => (
         <img
           key={index}
           src={img}
           alt={`${alt} ${index + 1}`}
-          className={`w-full object-contain max-h-[400px] transition-opacity duration-400 ${
+          className={`w-full h-48 object-cover transition-opacity duration-400 ${
   index === current ? 'opacity-100' : 'opacity-0 absolute inset-0'
 }`}
         />
