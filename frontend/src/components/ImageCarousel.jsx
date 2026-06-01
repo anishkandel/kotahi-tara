@@ -23,7 +23,8 @@ export default function ImageCarousel({ images = [], alt = '' }) {
           src={img}
           alt={`${alt} ${index + 1}`}
           className={`w-full h-48 object-cover transition-opacity duration-400 ${
-  index === current ? 'opacity-100' : 'opacity-0 absolute inset-0'
+  index === current ? 'opacity-100 relative' : 'opacity-0 absolute inset-0 h-48'
+}`}
 }`}
         />
       ))}
