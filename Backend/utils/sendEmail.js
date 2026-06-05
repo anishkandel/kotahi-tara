@@ -10,7 +10,7 @@ const sendEmail = async ({ to, subject, html }) => {
     await client.transactionalEmails.sendTransacEmail({
       subject,
       htmlContent: html,
-      sender: { name: 'Kotahi Tāra', email: 'your-brevo-registered-email@gmail.com' },
+      sender: { name: 'Kotahi Tāra', email: 'anishkandel100@gmail.com' },
       to: [{ email: to }]
     });
 
