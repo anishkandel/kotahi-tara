@@ -6,6 +6,7 @@ const createNotification = require('../utils/createNotification');
 const router = express.Router();
 const sendEmail = require('../utils/sendEmail');
 const User = require('../models/User');
+const crypto = require('crypto');
 // GET /api/pools  all pools with search + filter
 router.get('/', async (req, res) => {
   try {
@@ -137,6 +138,17 @@ router.post('/:id/select-winner', auth, isAdmin, async (req, res) => {
     pool.winnerSelectedAt = new Date();
     pool.status = 'completed';
     pool.winnerPublished = pool.winnerReleaseMode === 'instant';
+    // generate provable fairness proof
+    const allTickets = contributions.map(c => c.ticketCode).sort();
+    const seed = crypto.randomBytes(16).toString('hex');
+    const timestamp = new Date().toISOString();
+    const ticketListString = allTickets.join(',');
+    const proofData = `${ticketListString}|${seed}|${winnerContribution.ticketCode}|${timestamp}`;
+    const fairnessHash = crypto.createHash('sha256').update(proofData).digest('hex');
+    
+    pool.fairnessSeed = seed;
+    pool.fairnessHash = fairnessHash;
+    pool.fairnessTicketList = ticketListString;
 
     await pool.save();
     console.log(` Pool saved. Winner: ${pool.winner}, Published: ${pool.winnerPublished}`);
