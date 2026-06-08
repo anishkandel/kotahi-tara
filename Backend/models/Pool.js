@@ -12,6 +12,9 @@ const poolSchema = new mongoose.Schema(
     status: { type: String, enum: ['open', 'completed', 'expired'], default: 'open' },
     winner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     winningTicket: { type: String, default: null },       //  winning ticket code
+    fairnessSeed: { type: String, default: null },
+    fairnessHash: { type: String, default: null },
+    fairnessTicketList: { type: String, default: null },
 
     //  Admin contact for winner to reach out
     adminContact: { type: String, default: '' },
