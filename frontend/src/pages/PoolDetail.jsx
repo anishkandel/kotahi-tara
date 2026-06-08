@@ -17,6 +17,60 @@ const blurEmail = (email) => {
   return local.slice(0, 2) + '***@' + domain;
 };
 
+function ProvablyFair({ pool }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="bg-[#12121A] border border-[#1E1E2E] rounded-xl p-5 mb-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-[#00FFB2]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-[#00FFB2] font-semibold text-sm">Provably Fair Draw</span>
+        </div>
+        <button onClick={() => setExpanded(!expanded)}
+          className="text-xs text-gray-400 hover:text-[#00FFB2] transition-colors">
+          {expanded ? 'Hide details' : 'Verify this draw'}
+        </button>
+      </div>
+
+      <p className="text-gray-500 text-xs mt-2">
+        This draw is cryptographically verifiable. The winner was selected fairly and cannot be altered after the fact.
+      </p>
+
+      {expanded && (
+        <div className="mt-4 space-y-3 border-t border-[#1E1E2E] pt-4">
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Verification Hash (SHA-256)</p>
+            <p className="text-xs text-[#00FFB2] font-mono break-all bg-[#0A0A0F] p-2 rounded">{pool.fairnessHash}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Random Seed</p>
+            <p className="text-xs text-gray-300 font-mono break-all bg-[#0A0A0F] p-2 rounded">{pool.fairnessSeed}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Winning Ticket</p>
+            <p className="text-xs text-gray-300 font-mono bg-[#0A0A0F] p-2 rounded">{pool.winningTicket}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">All Tickets in Draw ({pool.fairnessTicketList?.split(',').length})</p>
+            <p className="text-xs text-gray-300 font-mono break-all bg-[#0A0A0F] p-2 rounded max-h-24 overflow-y-auto">{pool.fairnessTicketList}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Draw Timestamp</p>
+            <p className="text-xs text-gray-300 font-mono bg-[#0A0A0F] p-2 rounded">{new Date(pool.winnerSelectedAt).toISOString()}</p>
+          </div>
+          <div className="bg-[#0A0A0F] border border-[#1E1E2E] rounded p-3">
+            <p className="text-xs text-gray-400">
+              <span className="text-[#00FFB2] font-semibold">How to verify:</span> The hash is created from the ticket list, seed, winning ticket, and timestamp combined. Re-computing SHA-256 on this exact data produces the same hash, proving the draw was not tampered with.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 export default function PoolDetail() {
   const { id } = useParams();
   const { user,isAdmin } = useAuth();
@@ -285,6 +339,9 @@ useEffect(() => {
         )}
       </div>
     )}
+    {pool.winnerPublished && pool.fairnessHash && (
+   <ProvablyFair pool={pool} />
+)}
 
 
       {/* Winner selected but not published */}
